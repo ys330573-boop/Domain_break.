@@ -64,6 +64,12 @@ text, steady damage) → Gojo walks up and lays his hand on their head → white
   (WebRTC, with PeerJS' free relay if a direct link isn't possible). Use Chrome or Edge.
 - If the game is put online (GitHub Pages / Netlify…), the host also gets a **COPY INVITE LINK** button (`?join=CODE`).
 - If tab sharing isn't available, **SHARE GAME ONLY** sends just the 3D view (no HP bars / menus).
+- **Can't connect?** Both players press ONLINE → **NETWORK TEST**. Many home/mobile networks (Jio, Airtel fibre, mobile data,
+  office/college Wi-Fi) block a direct link — then you need a **TURN relay**. The free relays PeerJS used to include are
+  gone, so make a free TURN account (e.g. expressturn.com or metered.ca) and either put it in `src/netconfig.js` (and give
+  your friend the same file) or paste it in ONLINE → **RELAY SETTINGS** on both PCs. Also check: your friend has the
+  latest copy of the game folder, runs it with `start.bat` (not by double-clicking index.html), and you stay on the
+  room-code screen until they join.
 - Self-test with two browsers: `?onlinetest=1&host=ABCD-2345&autofight=1` and `?onlinetest=1&join=ABCD-2345&autojoin=1`.
 
 ## Match intro, KO replay & voices
@@ -124,5 +130,6 @@ Any name without a clip uses the built-in procedural pose, **retargeted onto the
 | `src/ai.js`, `src/input.js`, `src/hud.js`, `src/audio.js` | CPU, input, HUD, synthesised SFX |
 
 Tablet: the input layer is abstracted (`VirtualController`), so on-screen touch buttons can be added later without touching the gameplay code.
-#   D o m a i n _ b r e a k .  
+#   D o m a i n _ b r e a k . 
+ 
  

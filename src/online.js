@@ -6,7 +6,27 @@
 // directly between the two browsers (WebRTC, with PeerJS' public TURN relay as a fallback).
 // Nothing else changes in the game: every move, cinematic and menu works exactly as locally.
 
+import { TURN, STUN } from './netconfig.js';
+
 const PREFIX = 'domainbreak-v1-';
+// ICE servers: public STUN + TURN relays from src/netconfig.js + one saved in this browser (RELAY SETTINGS)
+function savedTurn() { try { const t = JSON.parse(localStorage.getItem('db-turn') || 'null'); return t?.urls ? [t] : []; } catch (e) { return []; } }
+function turnServers() { return [...TURN, ...savedTurn()]; }
+function iceServers() { return [...STUN, ...turnServers()]; }
+const peerOpts = () => ({ debug: 1, config: { iceServers: iceServers() } });
+const NEED_RELAY = 'Your two networks could not connect directly (common on mobile data, Jio/Airtel fibre, office Wi-Fi). ' +
+  'You need a TURN relay: ONLINE \u2192 RELAY SETTINGS (both players), see README.';
+// watch the WebRTC link of a PeerJS connection; cb('failed' | 'connected' | ...)
+function watchIce(conn, cb) {
+  let tries = 0;
+  const hook = () => {
+    const pc = conn.peerConnection;
+    if (!pc) { if (tries++ < 60) setTimeout(hook, 250); return; }
+    const on = () => cb(pc.iceConnectionState);
+    pc.addEventListener('iceconnectionstatechange', on); on();
+  };
+  hook();
+}
 const $ = s => document.querySelector(s);
 let PeerLib = null;
 function loadPeer() {
@@ -74,10 +94,59 @@ function badge(text) { if (text) trace('badge: ' + text); buildUI(); ui.badge.cl
 export function openOnline() {
   panel(`<h2>PLAY <span>ONLINE</span></h2>
     <p>HOST: your game runs here, you get a code and send it to your friend.<br>JOIN: type your friend's code — you play as Player 2.</p>
-    <div class="row"><button id="on-host">HOST</button><button id="on-join">JOIN</button><button id="on-x">CLOSE</button></div>`);
+    <div class="row"><button id="on-host">HOST</button><button id="on-join">JOIN</button><button id="on-x">CLOSE</button></div>
+    <div class="row"><button id="on-test">NETWORK TEST</button><button id="on-relay">RELAY SETTINGS${turnServers().length ? ' \u2713' : ''}</button></div>`);
   $('#on-host').onclick = () => startHost();
   $('#on-join').onclick = () => joinPanel();
   $('#on-x').onclick = () => closePanel();
+  $('#on-test').onclick = () => testPanel();
+  $('#on-relay').onclick = () => relayPanel();
+}
+function relayPanel() {
+  const t = savedTurn()[0] || {};
+  panel(`<h2>RELAY <span>SETTINGS</span></h2>
+    <p>Only needed when you and your friend can't connect directly. Make a free TURN account (expressturn.com or
+    metered.ca), then BOTH of you paste the same details here. ${TURN.length ? `<br>${TURN.length} relay(s) already set in src/netconfig.js.` : ''}</p>
+    <p><input id="rl-u" style="font-size:16px;width:100%;letter-spacing:0;text-transform:none" placeholder="turn:server:3478" value="${t.urls || ''}"></p>
+    <p><input id="rl-n" style="font-size:16px;width:46%;letter-spacing:0;text-transform:none" placeholder="username" value="${t.username || ''}">
+       <input id="rl-p" style="font-size:16px;width:46%;letter-spacing:0;text-transform:none" placeholder="password" value="${t.credential || ''}"></p>
+    <div class="row"><button id="rl-save">SAVE</button><button id="rl-clear">CLEAR</button><button id="rl-test">TEST</button><button id="rl-back">BACK</button></div><div class="st"></div>`);
+  const save = () => { const u = $('#rl-u').value.trim();
+    if (u && !/^turns?:/.test(u)) { status('The address must start with turn: or turns:', 'bad'); return false; }
+    localStorage.setItem('db-turn', JSON.stringify(u ? { urls: u, username: $('#rl-n').value.trim(), credential: $('#rl-p').value.trim() } : null)); return true; };
+  $('#rl-save').onclick = () => { if (save()) status('Saved in this browser.', 'ok'); };
+  $('#rl-clear').onclick = () => { localStorage.removeItem('db-turn'); relayPanel(); };
+  $('#rl-test').onclick = () => { if (save()) testPanel(); };
+  $('#rl-back').onclick = () => openOnline();
+}
+// what works on this network: the lobby, STUN (public address) and the TURN relay
+async function probeIce(servers, relayOnly) {
+  const pc = new RTCPeerConnection({ iceServers: servers, iceTransportPolicy: relayOnly ? 'relay' : 'all' });
+  pc.createDataChannel('t'); const types = new Set(); let err = '';
+  pc.onicecandidate = e => { const m = e.candidate && / typ (\w+)/.exec(e.candidate.candidate); if (m) types.add(m[1]); };
+  pc.onicecandidateerror = e => { err = `${e.errorCode} ${e.errorText || ''}`.trim(); };
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise(r => { const t0 = performance.now(); const iv = setInterval(() => { if (pc.iceGatheringState === 'complete' || performance.now() - t0 > 7000) { clearInterval(iv); r(); } }, 200); });
+  pc.close(); return { types, err };
+}
+async function testPanel() {
+  panel(`<h2>NETWORK <span>TEST</span></h2><p id="nt" style="text-align:left">Testing\u2026 (about 10 seconds)</p>
+    <div class="row"><button id="nt-relay">RELAY SETTINGS</button><button id="nt-back">BACK</button></div><div class="st"></div>`);
+  $('#nt-relay').onclick = () => relayPanel(); $('#nt-back').onclick = () => openOnline();
+  const lines = [], out = () => { const el = $('#nt'); if (el) el.innerHTML = lines.join('<br>'); };
+  let lobby = false;
+  try { const Peer = await loadPeer(); const p = new Peer(peerOpts());
+    lobby = await new Promise(r => { p.on('open', () => r(true)); p.on('error', () => r(false)); setTimeout(() => r(false), 8000); }); p.destroy();
+  } catch (e) {}
+  lines.push(lobby ? 'OK \u2014 online lobby (0.peerjs.com) reachable' : 'FAIL \u2014 online lobby (0.peerjs.com) NOT reachable: no internet, or it is blocked on this network'); out();
+  const st = await probeIce(STUN, false);
+  lines.push(st.types.has('srflx') ? 'OK \u2014 direct-connection check (STUN)' : 'WARN \u2014 direct-connection check (STUN) blocked: you will probably need a relay'); out();
+  const turns = turnServers();
+  if (!turns.length) lines.push('WARN \u2014 relay (TURN) not set. If you and your friend can\'t connect, add one in RELAY SETTINGS.');
+  else { const tr = await probeIce(turns, true);
+    lines.push(tr.types.has('relay') ? 'OK \u2014 relay (TURN) working' : `FAIL \u2014 relay (TURN) not working: check the address / username / password${tr.err ? ' (' + tr.err + ')' : ''}`); }
+  lines.push('<br>Ask your friend to run this test too.'); out();
+  trace('nettest ' + lines.join(' | '));
 }
 function joinPanel(code = '') {
   panel(`<h2>JOIN A <span>FRIEND</span></h2><p>Type the code your friend sent you.</p>
@@ -125,7 +194,7 @@ async function hostRoom(fixedCode, full) {
   try { Peer = await loadPeer(); } catch (e) { status(e.message, 'bad'); return; }
   S.role = 'host';
   const code = fixedCode || newCode();
-  const peer = S.peer = new Peer(PREFIX + code, { debug: 1 });
+  const peer = S.peer = new Peer(PREFIX + code, peerOpts());
   const link = isLocalUrl() ? '' : `${location.origin}${location.pathname}?join=${code}`;
   panel(`<h2>ROOM <span>CODE</span></h2>
     <div class="code">${code}</div>
@@ -136,15 +205,23 @@ async function hostRoom(fixedCode, full) {
   $('#on-copy').onclick = () => { navigator.clipboard?.writeText(code); status('Code copied!', 'ok'); };
   if (link) $('#on-link').onclick = () => { navigator.clipboard?.writeText(link); status('Invite link copied!', 'ok'); };
   $('#on-stop').onclick = () => leave();
-  peer.on('open', () => status('Waiting for your friend to join…'));
+  peer.on('open', () => status('Waiting for your friend to join\u2026' + (turnServers().length ? '' : ' (no relay set \u2014 if they can\'t connect, see RELAY SETTINGS)')));
   peer.on('error', e => {
     if (e.type === 'unavailable-id') { try { peer.destroy(); } catch (x) {} hostRoom(null, full); return; }  // code taken: pick another
     status('Online error: ' + (e.type || e.message), 'bad');
   });
   peer.on('disconnected', () => { if (S.role === 'host' && !S.conn) status('Lost the lobby connection, reconnecting…'); try { peer.reconnect(); } catch (e) {} });
   peer.on('connection', conn => {
-    if (S.conn) { conn.on('open', () => { conn.send({ t: 'busy' }); setTimeout(() => conn.close(), 400); }); return; }
+    if (S.conn?.open) { conn.on('open', () => { conn.send({ t: 'busy' }); setTimeout(() => conn.close(), 400); }); return; }
+    try { S.conn?.close(); } catch (e) {}
     S.conn = conn;
+    status('Your friend found the room \u2014 connecting\u2026', 'ok'); badge('ONLINE \u00b7 your friend is connecting\u2026');
+    watchIce(conn, st => {
+      if (st === 'failed' && S.conn === conn && !conn.open) {
+        S.conn = null; try { conn.close(); } catch (e) {}
+        status(NEED_RELAY, 'bad'); badge('ONLINE \u00b7 friend could not connect \u2014 a TURN relay is needed (ONLINE \u2192 RELAY SETTINGS)');
+      }
+    });
     conn.on('open', () => {
       S.call = peer.call(conn.peer, S.stream);
       tuneVideo(S.call);
@@ -189,11 +266,17 @@ async function startGuest(raw) {
   try { Peer = await loadPeer(); } catch (e) { status(e.message, 'bad'); return; }
   leave(true);
   S.role = 'guest';
-  const peer = S.peer = new Peer({ debug: 1 });
+  const peer = S.peer = new Peer(peerOpts());
   buildUI();
   const fail = msg => { if (S.role !== 'guest') return; joinPanel(code); status(msg, 'bad'); leave(true); };
-  const timer = setTimeout(() => { if (!ui.video.srcObject) fail('No answer from that room. Check the code, and that your friend is still hosting.'); }, 20000);
-  peer.on('error', e => fail(e.type === 'peer-unavailable' ? 'Room not found — check the code.' : 'Online error: ' + (e.type || e.message)));
+  let step = 'lobby';
+  const timer = setTimeout(() => { if (ui.video.srcObject) return;
+    fail(step === 'lobby' ? 'Could not reach the online lobby (0.peerjs.com). Check your internet \u2014 try NETWORK TEST.'
+      : step === 'room' ? NEED_RELAY
+      : 'Connected, but the video never arrived. Ask your friend to check that they shared the Domain Break tab.'); }, 30000);
+  peer.on('error', e => fail(e.type === 'peer-unavailable' ? `Room ${code} not found \u2014 check the code, and that your friend pressed HOST and is still on the code screen.`
+    : ['network', 'server-error', 'socket-error'].includes(e.type) ? 'Could not reach the online lobby (0.peerjs.com). Check your internet \u2014 try NETWORK TEST.'
+    : 'Online error: ' + (e.type || e.message)));
   peer.on('call', call => {
     S.call = call; call.answer();
     call.on('stream', s => {
@@ -208,8 +291,10 @@ async function startGuest(raw) {
     call.on('close', () => guestLost());
   });
   peer.on('open', () => {
+    step = 'room'; status('Lobby OK \u2014 connecting to your friend\u2026');
     const conn = S.conn = peer.connect(PREFIX + code, { reliable: true });
-    conn.on('open', () => status('Connected — waiting for the video…', 'ok'));
+    watchIce(conn, st => { if (st === 'failed') fail(NEED_RELAY); });
+    conn.on('open', () => { step = 'video'; status('Connected \u2014 waiting for the video\u2026', 'ok'); });
     conn.on('data', d => {
       if (d?.t === 'pong') { S.rtt = Math.round(performance.now() - d.s); conn.send({ t: 'rtt', v: S.rtt }); updateGuestBadge(); }
       else if (d?.t === 'busy') fail('That room already has a Player 2.');
@@ -274,4 +359,5 @@ export function initOnline(hooks) {
   const q = new URLSearchParams(location.search);
   if (q.get('join')) { S.lastCode = cleanCode(q.get('join')); joinPanel(S.lastCode); if (q.get('autojoin')) startGuest(S.lastCode); }
   else if (q.get('host') && q.get('onlinetest')) startHost(cleanCode(q.get('host')));
+  else if (q.get('nettest') && q.get('onlinetest')) testPanel();
 }

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Domain Break</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Yuji+Syuku&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="side" id="p1">
+    <div class="portrait"></div>
+    <div class="bars">
+      <div class="nameline"><span class="pname"></span><span class="ptitle"></span><span class="pips"></span></div>
+      <div class="hp"><div class="hp-trail"></div><div class="hp-fill"></div></div>
+      <div class="en"><div class="en-fill"></div><span>ENERGY</span></div>
+    </div>
+    <div class="dom"><div class="dom-fill"></div><span>領域</span></div>
+  </div>
+  <div id="timer">99</div>
+  <div class="side right" id="p2">
+    <div class="portrait"></div>
+    <div class="bars">
+      <div class="nameline"><span class="pname"></span><span class="ptitle"></span><span class="pips"></span></div>
+      <div class="hp"><div class="hp-trail"></div><div class="hp-fill"></div></div>
+      <div class="en"><div class="en-fill"></div><span>ENERGY</span></div>
+    </div>
+    <div class="dom"><div class="dom-fill"></div><span>領域</span></div>
+  </div>
+  <div class="combo left" id="combo1"></div>
+  <div class="combo right" id="combo2"></div>
+</div>
+<div id="fxlayer"></div>
+
+<!-- SCREENS -->
+<div class="screen active" id="loading">
+  <div class="logo small">DOMAIN<span>BREAK</span></div>
+  <div id="loadbar"><i></i></div>
+  <div id="loadtxt">LOADING…</div>
+</div>
+
+<div class="screen" id="title">
+  <div class="logo"><em>領</em>DOMAIN<span>BREAK</span><small>ANIME ARENA FIGHTER</small></div>
+  <div class="press">PRESS ENTER</div>
+  <button id="onlinebtn" class="onlinebtn">PLAY ONLINE WITH A FRIEND</button>
+  <div class="foot">Domain Expansion · Critical Spark · 2.5D Anime Fighter</div>
+</div>
+
+<div class="screen" id="select">
+  <div class="selhead">
+    <div id="selhint"></div>
+    <div class="opts">
+      <span class="grp"><button data-mode="cpu">VS CPU</button><button data-mode="vs">2 PLAYER</button></span>
+      <span class="grp" id="levels"><button data-level="easy">EASY</button><button data-level="normal">NORMAL</button><button data-level="hard">HARD</button></span>
+      <span class="grp"><button data-stage="dusk">DUSK</button><button data-stage="night">NIGHT</button></span>
+      <button id="voicebtn" class="on">VOICE ON</button>
+      <button id="movesbtn">MOVE LIST</button>
+      <button id="onlinebtn2">ONLINE</button>
+    </div>
+  </div>
+  <div class="selnames"><div id="selp1"></div><div id="selp2"></div></div>
+  <div id="grid"></div>
+  <div class="selfoot">A/D or mouse to choose · ENTER / J to confirm · ESC to go back</div>
+</div>
+
+<div class="screen" id="vs"></div>
+
+<div class="screen" id="result"><div id="resultbox"></div></div>
+
+<div class="overlay" id="pause">
+  <div class="box">
+    <h2>PAUSED</h2>
+    <button id="resume">RESUME</button>
+    <button id="quit">QUIT TO SELECT</button>
+  </div>
+</div>
+
+<div class="overlay" id="moves">
+  <div class="box wide">
+    <h2>MOVE LIST</h2>
+    <div class="cols">
+      <div>
+        <h3>PLAYER 1</h3>
+        <table>
+          <tr><td>Move</td><td><kbd>A</kbd> <kbd>D</kbd></td></tr>
+          <tr><td>Jump</td><td><kbd>W</kbd> / <kbd>Space</kbd></td></tr>
+          <tr><td>Block (hold)</td><td><kbd>S</kbd></td></tr>
+          <tr><td>Dash (+back = evade)</td><td><kbd>L-Shift</kbd></td></tr>
+          <tr><td>Light combo</td><td><kbd>J</kbd> <kbd>J</kbd> <kbd>J</kbd></td></tr>
+          <tr><td>Heavy / launcher</td><td><kbd>K</kbd></td></tr>
+          <tr><td>Jump Kick* (or Chop*) · Flip Kick*</td><td><kbd>D</kbd>+<kbd>K</kbd> · <kbd>A</kbd>+<kbd>K</kbd></td></tr>
+          <tr><td>4-hit string* (Gojo: punch, kick, lunge, spin kick · Sukuna: hook, kick, lunge, roundhouse)</td><td><kbd>J</kbd> <kbd>J</kbd> <kbd>J</kbd> <kbd>J</kbd></td></tr>
+          <tr><td>Sukuna*: K heavy cross · D+K chop · A+K spinning slash (anti-air)</td><td><kbd>K</kbd> · <kbd>D</kbd>+<kbd>K</kbd> · <kbd>A</kbd>+<kbd>K</kbd></td></tr>
+          <tr><td>Toji* (fastest): K 3-cut blade rush · D+K flying kick · A+K rising blade (anti-air) · L gun · U teleport slash · O worm-blade neck cut (super)</td><td><kbd>K</kbd> · <kbd>D</kbd>+<kbd>K</kbd> · <kbd>A</kbd>+<kbd>K</kbd></td></tr>
+          <tr><td>Backflip evade*</td><td><kbd>A</kbd>+<kbd>L-Shift</kbd></td></tr>
+          <tr><td>Special 1 · 2 · 3</td><td><kbd>L</kbd> <kbd>U</kbd> <kbd>O</kbd></td></tr>
+          <tr><td>DOMAIN (meter full)</td><td><kbd>I</kbd> or <kbd>D</kbd><kbd>D</kbd> (double-tap)</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>PLAYER 2</h3>
+        <table>
+          <tr><td>Move / Jump / Block</td><td><kbd>←</kbd><kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td></tr>
+          <tr><td>Light · Heavy</td><td><kbd>Num1</kbd> <kbd>Num2</kbd> / <kbd>,</kbd> <kbd>.</kbd></td></tr>
+          <tr><td>Special 1 · 2 · 3</td><td><kbd>Num3</kbd><kbd>Num4</kbd><kbd>Num5</kbd> / <kbd>/</kbd><kbd>;</kbd><kbd>'</kbd></td></tr>
+          <tr><td>Domain · Dash</td><td><kbd>Num6</kbd> / <kbd>]</kbd> / <kbd>→</kbd><kbd>→</kbd> · <kbd>Num0</kbd> <kbd>R-Shift</kbd></td></tr>
+        </table>
+        <p>* forward/back are relative to your facing. Only for characters with those animations (Gojo · Street Form).</p>
+        <p>Gamepads work too (X light, Y heavy, B/RB/RT specials, LT domain, LB dash).</p>
+      </div>
+    </div>
+    <div class="tips">
+      <p><b>CRITICAL SPARK:</b> press your next attack <u>right after</u> a hit connects (≈0.1s) — 2.5× damage, black lightning and a big boost to your Domain gauge.</p>
+      <p><b>DOMAIN EXPANSION:</b> fill the vertical 領域 gauge by fighting, then press Domain. A sure-hit cinematic — then you suffer BURNOUT (no specials for a few seconds).</p>
+      <p><b>KITS:</b> VOID — Gravity Orb · Repel Burst · Hollow Purple (cuts in half) &nbsp;|&nbsp; SHRINE — Cleave Wave · Dismantle Rush · Ember Arrow &nbsp;|&nbsp; HEAVENLY — Chain Lash · Phantom Rush · Spear Pierce (unblockable)</p>
+    </div>
+    <button id="movesclose">CLOSE</button>
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

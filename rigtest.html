@@ -1,0 +1,40 @@
+<!doctype html><html><body style="margin:0;background:#222">
+<script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { buildRiggedModel, instantiate } from './src/rig.js';
+import { makeToonMaterial, makeOutlineMaterial, makeFighterUniforms } from './src/toon.js';
+import { Animator } from './src/anim.js';
+import { getClips } from './src/poses.js';
+import { ROSTER } from './src/roster.js';
+const q = new URLSearchParams(location.search);
+const ids = (q.get('c') || ROSTER.map(r => r.id).join(',')).split(',');
+const poses = (q.get('p') || 'tpose,idle,jab,kick,heavy,block,sign,down').split(',');
+const view = q.get('v') || 'side';
+const W = 160, Hh = 240;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(W * poses.length, Hh * ids.length); r.setScissorTest(true); r.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(r.domElement);
+const clips = getClips();
+let row = 0;
+for (const id of ids) {
+  const def = ROSTER.find(d => d.id === id);
+  const rig = await buildRiggedModel(def);
+  for (let c = 0; c < poses.length; c++) {
+    const U = makeFighterUniforms(def.color);
+    const inst = instantiate(rig, m => makeToonMaterial(m, U), () => makeOutlineMaterial(U));
+    const s = new THREE.Scene(); s.background = new THREE.Color(0xd8d0c0);
+    s.add(new THREE.AmbientLight(0xffffff, 1.2)); const dl = new THREE.DirectionalLight(0xffffff, 2.2); dl.position.set(3, 5, 4); s.add(dl);
+    s.add(inst.group);
+    if (q.get('bones')) { const h = new THREE.SkeletonHelper(inst.group); s.add(h); }
+    const an = new Animator(inst); an.play(clips[poses[c]], { fade: 0 }); an.update(+(q.get('t') || 0.2));
+    if (view === 'side') inst.group.rotation.y = Math.PI / 2 - 0.35;
+    const cam = new THREE.PerspectiveCamera(30, W / Hh, 0.1, 100);
+    cam.position.set(0, 1.0, 5.2); cam.lookAt(0, 0.85, 0);
+    const x = c * W, y = (ids.length - 1 - row) * Hh;
+    r.setViewport(x, y, W, Hh); r.setScissor(x, y, W, Hh); r.render(s, cam);
+  }
+  row++;
+}
+document.title = 'done';
+</script></body></html>

@@ -15,12 +15,15 @@ import { AI } from './ai.js';
 import { MOVES } from './moves.js';
 import { probeVoiceFiles, setVoiceEnabled, voiceEnabled } from './voice.js';
 import { preloadPurple } from './purple.js';
-import { initOnline, openOnline, isGuest, onlineRole, guestKey } from './online.js';
+import { initOnline, openOnline, isGuest, guestPlaying, onlineRole, guestKey, onlineTestFrame } from './online.js';
+import { isTouch, onResize, toggleFullscreen, canFullscreen } from './display.js';
+import { TouchControls } from './touch.js';
+import { fitFov } from './camera.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.setPixelRatio(Math.min(devicePixelRatio, isTouch ? 1.5 : 1.75));   // phones: keep the frame rate up
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const post = new Post(renderer);
@@ -51,7 +54,7 @@ async function boot() {
   for (const t of ['glow', 'spark', 'burst', 'ring', 'slash', 'line', 'smoke', 'flame', 'crack']) getTex(t);
   buildSelect();
   show('title');
-  initOnline({ onHostConnected, onGuestKey, onGuestStart: () => { if (Q.get('autojoin') && Q.get('onlinetest')) onlineTestGuest(); } });
+  initOnline(onlineHooks);
 }
 
 function makePortraits() {
@@ -130,6 +133,7 @@ function show(name) {
   $('#hud').classList.toggle('hidden', name !== 'fight');
   if (name !== 'fight') { post.letterbox = false; post.grade({}); }
   if (name === 'select') { sel.step = 0; refreshSelect(); }
+  document.body.classList.toggle('fighting', name === 'fight');
 }
 function buildSelect() {
   const grid = $('#grid');
@@ -138,25 +142,34 @@ function buildSelect() {
     const el = document.createElement('div'); el.className = 'card'; el.dataset.i = i;
     el.style.setProperty('--c', def.color);
     el.innerHTML = `<div class="face" style="background-image:url(${portraits[def.id] || ''})"></div><div class="nm">${def.name}</div><div class="tt">${def.title}</div>`;
-    el.onmouseenter = () => { if (sel.step === 0) sel.p1 = i; else sel.p2 = i; refreshSelect(); sfx('ui'); };
-    el.onclick = () => confirmPick();
+    el.onmouseenter = () => { if (isTouch || (sel.online && sel.step === 0)) return; sel[pickSlot()] = i; refreshSelect(); sfx('ui'); };
+    // touch: first tap selects the fighter (shows them), a second tap on the same card confirms
+    el.onclick = () => {
+      if (isTouch && sel[pickSlot()] !== i) { if (sel.online && sel.step === 0) return; sel[pickSlot()] = i; refreshSelect(); sfx('ui'); return; }
+      confirmPick();
+    };
     grid.appendChild(el);
   });
   // locked slot to show where future characters go
   const lock = document.createElement('div'); lock.className = 'card locked'; lock.innerHTML = '<div class="face"></div><div class="nm">?</div><div class="tt">COMING SOON</div>';
   grid.appendChild(lock);
 }
+// which slot the current select step edits (online: the friend = Player 2 picks first, then you = Player 1)
+function pickSlot() { return sel.online ? (sel.step === 0 ? 'p2' : 'p1') : (sel.step === 0 ? 'p1' : 'p2'); }
 function refreshSelect() {
+  const show1 = !sel.online || sel.step >= 1, show2 = sel.online || sel.step >= 1;
   document.querySelectorAll('#grid .card').forEach(el => {
     const i = +el.dataset.i;
-    el.classList.toggle('p1', i === sel.p1); el.classList.toggle('p2', sel.step >= 1 && i === sel.p2);
+    el.classList.toggle('p1', show1 && i === sel.p1); el.classList.toggle('p2', show2 && i === sel.p2);
   });
-  setShowcase(0, ROSTER[sel.p1]);
-  setShowcase(1, sel.step >= 1 ? ROSTER[sel.p2] : null);
+  setShowcase(0, show1 ? ROSTER[sel.p1] : null);
+  setShowcase(1, show2 ? ROSTER[sel.p2] : null);
   const d1 = ROSTER[sel.p1], d2 = ROSTER[sel.p2];
-  $('#selp1').innerHTML = `<b style="--c:${d1.color}">${d1.name}</b><i>${d1.title}</i>`;
-  $('#selp2').innerHTML = sel.step >= 1 ? `<b style="--c:${d2.color}">${d2.name}</b><i>${d2.title}</i>` : `<b class="dim">${sel.mode === 'cpu' ? 'CPU' : 'P2'}</b><i>choose…</i>`;
-  $('#selhint').textContent = sel.step === 0 ? 'PLAYER 1 — CHOOSE YOUR FIGHTER' : sel.mode === 'cpu' ? 'CHOOSE YOUR OPPONENT' : 'PLAYER 2 — CHOOSE YOUR FIGHTER';
+  $('#selp1').innerHTML = show1 ? `<b style="--c:${d1.color}">${d1.name}</b><i>${d1.title}</i>` : `<b class="dim">YOU</b><i>after your friend…</i>`;
+  $('#selp2').innerHTML = show2 ? `<b style="--c:${d2.color}">${d2.name}</b><i>${d2.title}</i>` : `<b class="dim">${sel.mode === 'cpu' ? 'CPU' : 'P2'}</b><i>choose…</i>`;
+  $('#selhint').textContent = sel.online
+    ? (sel.step === 0 ? 'YOUR FRIEND (PLAYER 2) IS CHOOSING…' : 'PLAYER 1 — NOW CHOOSE YOUR FIGHTER')
+    : sel.step === 0 ? 'PLAYER 1 — CHOOSE YOUR FIGHTER' : sel.mode === 'cpu' ? 'CHOOSE YOUR OPPONENT' : 'PLAYER 2 — CHOOSE YOUR FIGHTER';
   document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === sel.mode));
   document.querySelectorAll('[data-level]').forEach(b => b.classList.toggle('on', b.dataset.level === sel.level));
   document.querySelectorAll('[data-stage]').forEach(b => b.classList.toggle('on', b.dataset.stage === sel.stage));
@@ -166,8 +179,8 @@ function confirmPick() {
   sfx('select');
   if (sel.step === 0) {
     sel.step = 1;
-    if (sel.p2 === sel.p1) sel.p2 = (sel.p1 + 1) % ROSTER.length;
-    showcase.slots[0] && (showcase.slots[0].U.uFlash.value = 1);
+    if (sel.online) { if (sel.p1 === sel.p2) sel.p1 = (sel.p2 + 1) % ROSTER.length; showcase.slots[1] && (showcase.slots[1].U.uFlash.value = 1); }
+    else { if (sel.p2 === sel.p1) sel.p2 = (sel.p1 + 1) % ROSTER.length; showcase.slots[0] && (showcase.slots[0].U.uFlash.value = 1); }
     refreshSelect();
   } else startFight();
 }
@@ -204,15 +217,24 @@ document.addEventListener('keydown', e => {
   initAudio();
   if (screen === 'title' && (e.code === 'Enter' || e.code === 'Space')) { sfx('select'); show('select'); return; }
   if (screen === 'select') {
+    if (sel.online && sel.step === 0) return;   // online: your friend is choosing first
     const n = ROSTER.length;
-    const k = sel.step === 0 ? 'p1' : 'p2';
+    const k = pickSlot();
     if (['KeyA', 'ArrowLeft'].includes(e.code)) { sel[k] = (sel[k] + n - 1) % n; sfx('ui'); refreshSelect(); }
     if (['KeyD', 'ArrowRight'].includes(e.code)) { sel[k] = (sel[k] + 1) % n; sfx('ui'); refreshSelect(); }
     if (['Enter', 'KeyJ', 'Space'].includes(e.code)) confirmPick();
-    if (['Escape', 'KeyK', 'Backspace'].includes(e.code)) { if (sel.step > 0) { sel.step = 0; refreshSelect(); sfx('ui'); } else show('title'); }
+    if (['Escape', 'KeyK', 'Backspace'].includes(e.code)) selectBack();
   }
   if (screen === 'fight' && e.code === 'Escape') togglePause();
 });
+// select-screen BACK (same as Esc) — needed on phones that have no keyboard
+function selectBack() { if (screen !== 'select' || (sel.online && sel.step === 0)) return; if (sel.step > 0) { sel.step = 0; refreshSelect(); sfx('ui'); } else show('title'); }
+$('#backbtn').onclick = () => selectBack();
+// fullscreen + pause buttons (top of the screen)
+$('#fsbtn').onclick = e => { e.stopPropagation(); toggleFullscreen(); };
+if (!canFullscreen) $('#fsbtn').style.display = 'none';
+$('#pausebtn').onclick = e => { e.stopPropagation(); if (isGuest()) { guestKey('Escape', true); guestKey('Escape', false); } else if (screen === 'fight') togglePause(); };
+const touch = new TouchControls({ getFighter: () => (!isGuest() && game?.fighters?.[0]) || null });
 // ------------------------------------------------------------------ online (src/online.js)
 // the friend's keys arrive here and are replayed as Player-2 keys (they press their own WASD / J K L…)
 const GUEST_FIGHT = { KeyA: 'ArrowLeft', ArrowLeft: 'ArrowLeft', KeyD: 'ArrowRight', ArrowRight: 'ArrowRight', KeyS: 'ArrowDown', ArrowDown: 'ArrowDown',
@@ -223,9 +245,12 @@ const guestDown = new Map();   // guest code -> replayed code
 function fakeKey(code, down) { document.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { code, key: code, bubbles: true })); }
 function onGuestKey(code, down) {
   if (!down) { const m = guestDown.get(code); if (m) { guestDown.delete(code); fakeKey(m, false); } return; }
-  if (screen === 'select') {           // the friend picks Player 2, after you picked Player 1
-    if (sel.step === 0) return;
-    const m = GUEST_MENU[code]; if (m) { fakeKey(m, true); fakeKey(m, false); }
+  if (screen === 'select') {           // the friend picks Player 2 first, then you pick Player 1
+    if (!sel.online || sel.step !== 0) return;
+    const m = GUEST_MENU[code], n = ROSTER.length;
+    if (m === 'ArrowLeft') { sel.p2 = (sel.p2 + n - 1) % n; sfx('ui'); refreshSelect(); }
+    else if (m === 'ArrowRight') { sel.p2 = (sel.p2 + 1) % n; sfx('ui'); refreshSelect(); }
+    else if (m === 'Enter') confirmPick();
     return;
   }
   if (screen === 'result') { if (['Enter', 'KeyJ', 'Space'].includes(code)) $('#rematch')?.click(); return; }
@@ -234,11 +259,16 @@ function onGuestKey(code, down) {
   guestDown.set(code, m); fakeKey(m, true);
 }
 function onHostConnected() {
-  sel.mode = 'vs';
-  if (['title', 'select', 'result'].includes(screen)) show('select'); else refreshSelect();
+  sel.mode = 'vs'; sel.online = true;
+  if (game && screen === 'fight') { game.dispose(); game = null; }
+  show('select');
   hud.announce('FRIEND JOINED', 'round', 1400);
-  if (Q.get('autofight')) { sel.p1 = 0; sel.p2 = 1; sel.step = 1; startFight(); onlineTestHost(); }
+  if (Q.get('autofight')) { sel.p1 = 0; sel.p2 = 1; sel.step = 1; startFight(); }
+  if (Q.get('onlinetest')) onlineTestHost();
 }
+function onlineOff() { if (!sel.online) return; sel.online = false; if (screen === 'select') { sel.step = 0; refreshSelect(); } }
+const onlineHooks = { onHostConnected, onGuestKey, onHostLost: onlineOff, onHostEnd: onlineOff,
+  onGuestStart: () => { if (Q.get('autojoin') && Q.get('onlinetest')) onlineTestGuest(); } };
 $('#onlinebtn').addEventListener('click', e => { e.stopPropagation(); initAudio(); sfx('ui'); openOnline(); });
 $('#onlinebtn2').onclick = () => { sfx('ui'); openOnline(); };
 
@@ -256,11 +286,13 @@ $('#movesbtn').onclick = () => $('#moves').classList.toggle('active');
 $('#voicebtn').onclick = () => { setVoiceEnabled(!voiceEnabled()); $('#voicebtn').textContent = 'VOICE ' + (voiceEnabled() ? 'ON' : 'OFF'); $('#voicebtn').classList.toggle('on', voiceEnabled()); sfx('ui'); };
 $('#movesclose').onclick = () => $('#moves').classList.remove('active');
 
-addEventListener('resize', () => {
+function resize() {
   renderer.setSize(innerWidth, innerHeight); post.setSize(innerWidth, innerHeight);
-  showcase.cam.aspect = innerWidth / innerHeight; showcase.cam.updateProjectionMatrix();
+  showcase.cam.aspect = innerWidth / innerHeight; showcase.cam.fov = fitFov(30, showcase.cam.aspect); showcase.cam.updateProjectionMatrix();
   game?.resize();
-});
+}
+onResize(resize);
+resize();
 
 // ------------------------------------------------------------------ loop
 let last = performance.now();
@@ -269,6 +301,8 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   tickInput(now / 1000);
   window.__fc = (window.__fc || 0) + 1;
+  const gp = guestPlaying(); document.body.classList.toggle('guestplay', gp);
+  touch.update(gp || (screen === 'fight' && !!game && !game.paused && game.phase !== 'replay'));
   if (isGuest()) return;          // watching the host's game: nothing to draw here
   if (screen === 'fight' && game) { if (!window.__hold) game.update(dt); game.render(); }
   else if (['select', 'vs', 'title', 'result'].includes(screen)) {
@@ -286,7 +320,10 @@ async function post8766(name, body) {
     try { await fetch(`/save?name=${name}`, { method: 'POST', body, cache: 'no-store', keepalive: false }); return; } catch (e) { await new Promise(r => setTimeout(r, 300)); }
   }
 }
-boot().then(() => {
+if (Q.get('join')) {   // opened from an invite link: this page only shows the host's game
+  document.querySelectorAll('.screen').forEach(e => e.classList.remove('active'));
+  initOnline(onlineHooks);
+} else boot().then(() => {
   if (Q.get('ui')) { show(Q.get('ui')); if (Q.get('step')) { sel.step = 1; refreshSelect(); } }
   if (!Q.get('test')) return;
   const i1 = ROSTER.findIndex(d => d.id === Q.get('p1')), i2 = ROSTER.findIndex(d => d.id === Q.get('p2'));
@@ -348,11 +385,14 @@ function onlineTestHost() {
   // headless browsers may not run requestAnimationFrame: drive the game from a timer if frames stall
   let lastFc = -1, rafStalled = 0;
   setInterval(() => {
-    if (window.__fc === lastFc && screen === 'fight' && game) { rafStalled++; tickInput(performance.now() / 1000); game.update(1 / 30); game.render(); }
+    if (window.__fc === lastFc && screen === 'fight' && game) { rafStalled++; tickInput(performance.now() / 1000); game.update(1 / 30); game.render(); onlineTestFrame(); }
+    else if (window.__fc === lastFc) { post.render(showcase.scene, showcase.cam); onlineTestFrame(); }
     lastFc = window.__fc;
   }, 33);
   const iv = setInterval(async () => {
     const g = game; if (g && g.phase === 'intro') g.beginRound();
+    if (!Q.get('autofight')) { log.push({ t: +((performance.now() - t0) / 1000).toFixed(2), screen, step: sel.step, p1: sel.p1, p2: sel.p2, online: !!sel.online });
+      if (screen === 'select' && sel.step === 1 && !log.hostPicked) { log.hostPicked = 1; setTimeout(() => { fakeKey('KeyD', true); fakeKey('KeyD', false); fakeKey('Enter', true); fakeKey('Enter', false); }, 600); } }
     if (g) { const f = g.fighters[1]; log.push({ t: +((performance.now() - t0) / 1000).toFixed(2), fc: window.__fc, stall: rafStalled, phase: g.phase, x: +f.pos.x.toFixed(2), st: f.state, anim: f.animName, hp: g.fighters.map(q => Math.round(q.hp)) }); }
     if (performance.now() - t0 > 17000) {
       clearInterval(iv);
@@ -362,14 +402,14 @@ function onlineTestHost() {
   }, 250);
 }
 function onlineTestGuest() {
-  const v = document.querySelector('#guestview video');
+  const v = document.querySelector('#guestview canvas');
   const tap = (c, ms = 120) => { guestKey(c, true); setTimeout(() => guestKey(c, false), ms); };
-  const shot = async name => { const c = document.createElement('canvas'); c.width = v.videoWidth || 640; c.height = v.videoHeight || 360; c.getContext('2d').drawImage(v, 0, 0, c.width, c.height); await post8766(name, c.toDataURL('image/png')); };
+  const shot = async name => { await post8766(name, v.toDataURL('image/png')); };
   setTimeout(() => guestKey('KeyA', true), 6000);
   setTimeout(() => guestKey('KeyA', false), 7600);
   setTimeout(() => shot('onl_guest_1'), 7000);
   for (let i = 0; i < 4; i++) setTimeout(() => tap('KeyJ'), 8500 + i * 380);
   setTimeout(() => tap('KeyL'), 10500);
   setTimeout(() => shot('onl_guest_2'), 11000);
-  setTimeout(() => post8766('onl_guest_log', JSON.stringify({ w: v.videoWidth, h: v.videoHeight, rtt: document.querySelector('.netbadge .t')?.textContent })), 12000);
+  setTimeout(() => post8766('onl_guest_log', JSON.stringify({ w: v.width, h: v.height, rtt: document.querySelector('.netbadge .t')?.textContent })), 12000);
 }

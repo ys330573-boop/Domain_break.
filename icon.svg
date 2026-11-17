@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0b0710"/>
+  <path d="M0 330 L512 180 L512 512 L0 512Z" fill="#ff2a5a"/>
+  <path d="M0 360 L512 210 L512 236 L0 386Z" fill="#fff8ec"/>
+  <text x="256" y="250" font-family="Impact, 'Arial Black', sans-serif" font-size="200" text-anchor="middle" fill="#fff8ec" stroke="#0b0710" stroke-width="10" paint-order="stroke" transform="rotate(-6 256 256)">DB</text>
+  <text x="256" y="440" font-family="serif" font-size="130" text-anchor="middle" fill="#ffd84a" stroke="#0b0710" stroke-width="8" paint-order="stroke">領域</text>
+</svg>

@@ -32,8 +32,8 @@ cel-shaded materials and outlines. The hollow purple orbs are drawn with the gam
 
 ## Software
 
-- **PeerJS** 1.5.4 — MIT License, © 2015 Michelle Bu and Eric Zhang — https://peerjs.com
-  (license text: `vendor/peerjs/LICENSE`; online play uses the free PeerJS cloud broker)
+- **cloudflared** (Cloudflare Tunnel client) — Apache License 2.0 — https://github.com/cloudflare/cloudflared
+  Not shipped with the game: HOST-ONLINE.bat downloads it into `tools/` for online play (free "quick tunnel").
 - **three.js** r160 — MIT License, © 2010-2023 three.js authors —
   https://threejs.org (license text: `vendor/three/LICENSE`)
 

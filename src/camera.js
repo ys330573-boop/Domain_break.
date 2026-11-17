@@ -1,6 +1,12 @@
 // Fighting-game camera + cinematic shot director with shake / punch-zoom / dutch tilt.
 import * as THREE from 'three';
 
+// keep the horizontal view of a 16:9 frame when the screen is narrower than 16:9
+export function fitFov(fov, aspect, ref = 16 / 9) {
+  if (aspect >= ref) return fov;
+  return THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(fov / 2)) * ref / aspect));
+}
+
 export class CameraDirector {
   constructor(aspect) {
     this.cam = new THREE.PerspectiveCamera(30, aspect, 0.1, 400);
@@ -66,7 +72,9 @@ export class CameraDirector {
     this.cam.up.set(0, 1, 0);
     this.cam.lookAt(this.look);
     this.cam.rotateZ(roll);
-    if (Math.abs(this.cam.fov - this.fov) > 0.01) { this.cam.fov = this.fov; this.cam.updateProjectionMatrix(); }
+    // shots are framed for 16:9 — on narrower screens (tablets 4:3) widen the vertical FOV so both fighters stay in view
+    const fov = fitFov(this.fov, this.cam.aspect);
+    if (Math.abs(this.cam.fov - fov) > 0.01) { this.cam.fov = fov; this.cam.updateProjectionMatrix(); }
   }
   project(v3) { // world -> 0..1 screen uv
     const p = v3.clone().project(this.cam);

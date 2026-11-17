@@ -6,7 +6,11 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: var(--paper); font-family: var(--fb); user-select: none; }
-#game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+body { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; overscroll-behavior: none; touch-action: none; }
+.touchonly { display: none; }
+body.touch .touchonly { display: inline; }
+body.touch .keyonly { display: none; }
 button { font-family: var(--fd); letter-spacing: 1px; font-size: 18px; color: var(--paper); background: var(--ink); border: 3px solid var(--paper);
   padding: 6px 16px; cursor: pointer; transform: skewX(-12deg); box-shadow: 4px 4px 0 var(--hot); transition: transform .08s, box-shadow .08s; }
 button:hover { transform: skewX(-12deg) translate(-2px, -2px); box-shadow: 6px 6px 0 var(--hot); }
@@ -219,3 +223,82 @@ kbd { font-family: var(--fd); background: var(--paper); color: var(--ink); paddi
 .replaytag.rewind { animation: blink .4s steps(2) infinite; color: #9fe3ff; }
 .replaytag.replay i { display: inline-block; width: 18px; height: 18px; border-radius: 50%; background: #ff2a3a; margin-right: 12px; animation: blink 1s steps(2) infinite; }
 .replaytag small { font-size: 20px; opacity: .8; margin-left: 10px; }
+
+/* ================================================================ responsive / phones & tablets
+   --ui / --uim are set by src/display.js from the window size (1 on a normal PC window). */
+:root { --ui: 1; --uim: 1; }
+#hud, #fxlayer, .dialog, .replaytag { zoom: var(--ui); }
+.screen, .overlay { zoom: var(--uim); }
+#vs { zoom: 1; }
+.overlay .box.wide { touch-action: pan-y; }
+@media (max-width: 760px), (max-height: 520px) {
+  .overlay .cols { grid-template-columns: 1fr; }
+  #select { padding: 10px 12px 8px; }
+  .selnames { top: 30%; }
+  .press { margin-top: 30px; }
+}
+
+/* ---------------- top buttons (fullscreen / pause) */
+#topbtns { position: fixed; z-index: 60; top: max(8px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); display: flex; gap: 10px; }
+#topbtns button { width: 44px; height: 40px; padding: 0; font-size: 20px; line-height: 1; transform: skewX(-10deg); box-shadow: 3px 3px 0 var(--hot); background: rgba(11, 7, 16, .78); }
+#fsbtn .exit, body.isfs #fsbtn .enter { display: none; }
+body.isfs #fsbtn .exit { display: inline; }
+#pausebtn { display: none; font-size: 15px !important; letter-spacing: -2px; }
+/* during a fight they sit under the timer, out of the way of both health bars */
+body.fighting #topbtns { right: auto; left: 50%; transform: translateX(-50%); top: calc(96px * var(--ui) + 4px); }
+body.fighting #topbtns button { width: 40px; height: 34px; opacity: .85; }
+body.fighting.touch #pausebtn, body.guestplay.touch #pausebtn { display: block; }
+body.guestplay #topbtns { right: auto; left: 50%; transform: translateX(-50%); top: calc(96px * var(--ui) + 4px); }
+body.fighting:not(.touch) #fsbtn { opacity: .35; }
+body.guestplay #topbtns { z-index: 197; }
+
+/* ---------------- "rotate your phone" (touch devices held upright) */
+#rotate { position: fixed; inset: 0; z-index: 300; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: radial-gradient(circle at 50% 40%, #2b1450, #07040c 75%); text-align: center; padding: 20px; }
+#rotate b { font-family: var(--fd); font-size: 34px; letter-spacing: 3px; color: var(--gold); text-shadow: 3px 3px 0 var(--hot); }
+#rotate i { font-style: normal; opacity: .8; letter-spacing: 1px; }
+#rotate .phone { width: 54px; height: 92px; border: 5px solid var(--paper); border-radius: 10px; box-shadow: 5px 5px 0 var(--hot); animation: rotphone 1.8s ease-in-out infinite; }
+@keyframes rotphone { 0%, 25% { transform: rotate(0); } 55%, 100% { transform: rotate(-90deg); } }
+@media (orientation: portrait) { body.touch #rotate { display: flex; } }
+
+/* ---------------- on-screen touch controls (src/touch.js) */
+#touchpad { --b: clamp(50px, 12.5vmin, 96px); position: fixed; inset: 0; z-index: 196; pointer-events: none; display: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+#touchpad.on { display: block; }
+#touchpad .tzone { position: absolute; left: 0; bottom: 0; width: 46%; height: 72%; pointer-events: auto; }
+/* joystick: rests bottom-left, jumps to wherever the thumb lands */
+#touchpad .stick { position: absolute; left: calc(var(--b) * .55 + env(safe-area-inset-left)); bottom: calc(var(--b) * .45 + env(safe-area-inset-bottom)); width: calc(var(--b) * 2.3); height: calc(var(--b) * 2.3);
+  border-radius: 50%; border: 3px solid rgba(255, 248, 236, .45); background: radial-gradient(circle, rgba(11, 7, 16, .25), rgba(11, 7, 16, .55)); opacity: .6; transition: opacity .15s; pointer-events: none; }
+#touchpad .stick.active { bottom: auto; opacity: 1; border-color: var(--cool); }
+#touchpad .knob { position: absolute; left: 50%; top: 50%; width: 44%; height: 44%; margin: -22% 0 0 -22%; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #c9d8e8 55%, #7f93a8); border: 3px solid var(--ink); box-shadow: 0 0 0 3px rgba(255, 248, 236, .5), 0 4px 10px rgba(0, 0, 0, .5); }
+#touchpad .stick.active .knob { box-shadow: 0 0 0 3px var(--cool), 0 0 18px var(--cool); }
+#touchpad .ar { position: absolute; font-style: normal; font-size: calc(var(--b) * .24); color: rgba(255, 248, 236, .85); text-shadow: 1px 1px 0 #000; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+#touchpad .ar small { font-family: var(--fd); font-size: calc(var(--b) * .16); letter-spacing: 1px; }
+#touchpad .ar.u { top: 5%; left: 50%; transform: translateX(-50%); }
+#touchpad .ar.d { bottom: 5%; left: 50%; transform: translateX(-50%); flex-direction: column-reverse; }
+#touchpad .ar.l { left: 6%; top: 50%; transform: translateY(-50%); }
+#touchpad .ar.r { right: 6%; top: 50%; transform: translateY(-50%); }
+/* buttons: positioned from the bottom-right corner in units of --b */
+#touchpad .tbtns { position: absolute; right: env(safe-area-inset-right); bottom: env(safe-area-inset-bottom); width: 0; height: 0; }
+#touchpad .tbtn { position: absolute; pointer-events: auto; touch-action: none;
+  width: calc(var(--b) * var(--s)); height: calc(var(--b) * var(--s));
+  right: calc(var(--b) * (var(--x) - var(--s) / 2)); bottom: calc(var(--b) * (var(--y) - var(--s) / 2));
+  border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  background: radial-gradient(circle at 40% 30%, rgba(60, 44, 78, .82), rgba(11, 7, 16, .82)); border: 3px solid rgba(255, 248, 236, .85);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, .6), 0 5px 0 rgba(0, 0, 0, .45); color: var(--paper); transition: transform .05s, background .05s; }
+#touchpad .tbtn span { font-family: var(--fd); letter-spacing: 1px; font-size: calc(var(--b) * .25); line-height: 1; text-shadow: 2px 2px 0 var(--ink); max-width: 92%; overflow: hidden; white-space: nowrap; }
+#touchpad .tbtn small { font-size: calc(var(--b) * .13); opacity: .75; letter-spacing: .5px; margin-top: 2px; }
+#touchpad .tbtn em { font-style: normal; font-family: var(--fj); font-size: calc(var(--b) * .3); line-height: 1; color: var(--gold); }
+#touchpad .tbtn.down { transform: scale(.9); background: radial-gradient(circle, rgba(255, 248, 236, .95), rgba(200, 190, 210, .9)); }
+#touchpad .tbtn.down span, #touchpad .tbtn.down small { color: var(--ink); text-shadow: none; }
+#touchpad .tbtn.main { border-color: var(--gold); border-width: 4px; background: radial-gradient(circle at 40% 30%, rgba(255, 70, 110, .9), rgba(150, 10, 45, .88)); }
+#touchpad .tbtn.main span { font-size: calc(var(--b) * .33); }
+#touchpad .tbtn.main.down { background: radial-gradient(circle, #fff3b0, var(--gold)); }
+#touchpad .tbtn.guard { border-color: var(--cool); }
+#touchpad .tbtn.sp { border-color: #c79bff; background: radial-gradient(circle at 40% 30%, rgba(110, 60, 170, .85), rgba(30, 12, 50, .85)); }
+#touchpad .tbtn.sp span { font-size: calc(var(--b) * .2); }
+#touchpad .tbtn.sp.low { opacity: .45; filter: grayscale(.7); }
+#touchpad .tbtn.ult { border-color: #777; opacity: .6; }
+#touchpad .tbtn.ult span { font-size: calc(var(--b) * .19); }
+#touchpad .tbtn.ult.ready { opacity: 1; border-color: var(--gold); animation: ultready .5s steps(2) infinite; }
+@keyframes ultready { 50% { box-shadow: 0 0 0 3px var(--gold), 0 0 26px var(--gold); } }
+/* thumbs cover the lower screen: lift the combo counter a bit */
+body.touch.fighting .combo { top: 22%; }

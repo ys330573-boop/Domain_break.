@@ -52,25 +52,21 @@ text, steady damage) → Gojo walks up and lays his hand on their head → white
 **Domain Expansion:** fills by fighting. It plays a sure-hit cinematic (hand-sign close-ups, an ink sphere, a unique domain world and a glass-shatter exit), then puts you in *burnout* (no specials for 6 s).
 
 ## Play online with a friend (remote play)
-`src/online.js` — title screen **PLAY ONLINE WITH A FRIEND** (or **ONLINE** on the select screen).
-1. **Host** (you): press **HOST**. The browser asks what to share — pick **this tab** (Domain Break) and tick *share audio*.
-   You get a room code like `QWER-4821`; send it to your friend. Keep this tab open and in front while playing.
-2. **Friend**: opens Domain Break (their own copy via `start.bat`, or your online link) → **ONLINE → JOIN** → types the code.
-   They see your game as live video and play **Player 2** with their own keys (A/D move, W jump, S block, J/K attack,
-   L/U/O specials, I domain, Shift dash — or a gamepad). On character select you pick Player 1, then they pick Player 2.
-- The game itself only runs on the host, so every move, cinematic, domain and replay works exactly as offline.
-  The friend has a small delay (their ping is shown at the bottom) and the picture quality depends on the host's upload speed.
-- Room codes go through the free PeerJS broker (needs internet); video and keys then go straight between the two browsers
-  (WebRTC, with PeerJS' free relay if a direct link isn't possible). Use Chrome or Edge.
-- If the game is put online (GitHub Pages / Netlify…), the host also gets a **COPY INVITE LINK** button (`?join=CODE`).
-- If tab sharing isn't available, **SHARE GAME ONLY** sends just the 3D view (no HP bars / menus).
-- **Can't connect?** Both players press ONLINE → **NETWORK TEST**. Many home/mobile networks (Jio, Airtel fibre, mobile data,
-  office/college Wi-Fi) block a direct link — then you need a **TURN relay**. The free relays PeerJS used to include are
-  gone, so make a free TURN account (e.g. expressturn.com or metered.ca) and either put it in `src/netconfig.js` (and give
-  your friend the same file) or paste it in ONLINE → **RELAY SETTINGS** on both PCs. Also check: your friend has the
-  latest copy of the game folder, runs it with `start.bat` (not by double-clicking index.html), and you stay on the
-  room-code screen until they join.
-- Self-test with two browsers: `?onlinetest=1&host=ABCD-2345&autofight=1` and `?onlinetest=1&join=ABCD-2345&autojoin=1`.
+Step-by-step guide for you and your friend (Hindi + English): **GUIDE.md**.
+1. **Host** (you): double-click **HOST-ONLINE.bat** (instead of start.bat). The game opens in your browser (Chrome / Edge).
+   PLAY ONLINE WITH A FRIEND → **HOST** → share **this tab** with tab audio → **COPY INVITE LINK** → send it.
+2. **Friend**: opens the link (Chrome / Edge, PC or laptop with a keyboard or gamepad) → **JOIN**. Nothing to install.
+3. Character select: your friend (Player 2) picks first, then you pick Player 1, then the fight starts.
+- How it works: `online_server.py` serves the game, relays the match over WebSockets and opens a free Cloudflare quick
+  tunnel (no account; `tools/cloudflared.exe` is downloaded the first time, ~55 MB). The invite link is that tunnel's
+  https address. The host's tab is encoded with WebCodecs (H.264 or VP8, 1280x720 @30, sound as Opus) and streamed to the
+  friend; the friend's keys come back and are replayed as Player-2 keys (`src/online.js`, `main.js` → `onGuestKey`).
+  Everything goes over normal https, so it works on any network (mobile data, any Wi-Fi, another city).
+- The game only runs on the host, so every move, cinematic and replay is identical. The friend feels the internet delay
+  (ping shown at the bottom); it is the host's + friend's distance to Cloudflare, typically 0.1-0.4 s round trip.
+- The invite link changes every time HOST-ONLINE.bat starts. Keep the black window open while playing.
+- Self-test: `DB_TEST_OUT=<folder> python online_server.py --no-browser`, then open
+  `http://localhost:8765/index.html?onlinetest=1&host=1&autofight=1` and `<tunnel>/?join=1&onlinetest=1&autojoin=1`.
 
 ## Match intro, KO replay & voices
 - **Intro:** overhead crane shot → each fighter walks in and says their line (press J / Space to skip).

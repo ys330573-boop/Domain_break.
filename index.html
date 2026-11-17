@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Domain Break">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
 <title>Domain Break</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Yuji+Syuku&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
@@ -38,6 +46,14 @@
 </div>
 <div id="fxlayer"></div>
 
+<!-- top buttons: fullscreen everywhere, pause during a fight (phones have no Esc key) -->
+<div id="topbtns">
+  <button id="pausebtn" title="Pause">❚❚</button>
+  <button id="fsbtn" title="Fullscreen"><span class="enter">⛶</span><span class="exit">✕</span></button>
+</div>
+<!-- phones held upright -->
+<div id="rotate"><div class="phone"></div><b>ROTATE YOUR PHONE</b><i>Domain Break plays in landscape</i></div>
+
 <!-- SCREENS -->
 <div class="screen active" id="loading">
   <div class="logo small">DOMAIN<span>BREAK</span></div>
@@ -47,7 +63,7 @@
 
 <div class="screen" id="title">
   <div class="logo"><em>領</em>DOMAIN<span>BREAK</span><small>ANIME ARENA FIGHTER</small></div>
-  <div class="press">PRESS ENTER</div>
+  <div class="press"><span class="keyonly">PRESS ENTER</span><span class="touchonly">TAP TO START</span></div>
   <button id="onlinebtn" class="onlinebtn">PLAY ONLINE WITH A FRIEND</button>
   <div class="foot">Domain Expansion · Critical Spark · 2.5D Anime Fighter</div>
 </div>
@@ -62,11 +78,12 @@
       <button id="voicebtn" class="on">VOICE ON</button>
       <button id="movesbtn">MOVE LIST</button>
       <button id="onlinebtn2">ONLINE</button>
+      <button id="backbtn">◀ BACK</button>
     </div>
   </div>
   <div class="selnames"><div id="selp1"></div><div id="selp2"></div></div>
   <div id="grid"></div>
-  <div class="selfoot">A/D or mouse to choose · ENTER / J to confirm · ESC to go back</div>
+  <div class="selfoot"><span class="keyonly">A/D or mouse to choose · ENTER / J to confirm · ESC to go back</span><span class="touchonly">Tap a fighter to choose · tap again to confirm</span></div>
 </div>
 
 <div class="screen" id="vs"></div>
@@ -118,6 +135,9 @@
     <div class="tips">
       <p><b>CRITICAL SPARK:</b> press your next attack <u>right after</u> a hit connects (≈0.1s) — 2.5× damage, black lightning and a big boost to your Domain gauge.</p>
       <p><b>DOMAIN EXPANSION:</b> fill the vertical 領域 gauge by fighting, then press Domain. A sure-hit cinematic — then you suffer BURNOUT (no specials for a few seconds).</p>
+      <p><b>PHONE / TABLET:</b> left thumb anywhere on the left half = move stick (push up = jump, down = block). Right thumb: hold <b>ATTACK</b> for an automatic combo, HEAVY, DASH, the three specials and DOMAIN (glows when the gauge is full). ❚❚ pauses, ⛶ = fullscreen. Turn the phone sideways.</p>
+      <p><b>PLAY ONLINE WITH A FRIEND:</b> start the game with <b>HOST-ONLINE.bat</b> → PLAY ONLINE → HOST → share <i>this tab</i> → COPY INVITE LINK → send it.
+        Your friend just opens the link and presses JOIN (any network, phone data is fine). They pick their fighter first, then you pick yours. Full steps: <b>GUIDE.md</b>.</p>
       <p><b>KITS:</b> VOID — Gravity Orb · Repel Burst · Hollow Purple (cuts in half) &nbsp;|&nbsp; SHRINE — Cleave Wave · Dismantle Rush · Ember Arrow &nbsp;|&nbsp; HEAVENLY — Chain Lash · Phantom Rush · Spear Pierce (unblockable)</p>
     </div>
     <button id="movesclose">CLOSE</button>
